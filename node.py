@@ -106,7 +106,13 @@ class Node:
         
         for t in threads:
             t.join()
-        
+
+        #AQUI VA LA TOLERANCIA A FALLOS
+        #Podria ser que se verifique que en cada rango definido tenga el tamaño del rango
+        #Si no tiene ese tamaño siginifica que no llego completo o que no llego
+        #Entonces se pide que retransmitan esa parte puede ser al mismo o algun owner
+        #Asi hasta que este completo el archvio y mientra allá owners en la red
+
         print(f"Node {self.name} has received all the parts of {filename}. "
               f"Now going to sort them based on ranges.")
         # we have received all parts of the file.
@@ -122,7 +128,7 @@ class Node:
         print(f"{filename} is successfully saved for Node {self.name}.")
         
         # TODO check if there is a missing range
-        
+
         # TODO add algorithm
     
     @staticmethod
@@ -140,7 +146,7 @@ class Node:
             vl_srt_by_idx = sorted(list(v), key=itemgetter('idx'))
             res.append(vl_srt_by_idx)
         return res
-    
+
     def receive_file(self, filename: str, rng: Tuple[int, int], owner: tuple):
         # telling the nodes we NEED a file, therefore idx=-1 and data=None.
         msg = FileCommunication(self.name, owner[0], filename, rng)
@@ -199,6 +205,7 @@ class Node:
             return
         else:
             print(f"Node {self.name} is now listening for download requests.")
+            print("File is added to the upload list.")
             self.has_started_uploading = True
         
         # start listening for requests in a thread.
@@ -261,19 +268,28 @@ class Node:
 
 def main(name: str, rec_port: int, send_port: int):
     node = Node(name, rec_port, send_port)
-    
+    print('\n************************* COMMANDS *************************')
+    print('torrent -setMode <upload/download> <filename>')
+    print('torrent exit')
+    print('# You can upload/download multiple files by separating it by spaces')
+    print('*************************************************************')
+    print('Insert your command:')
     command = input()
     while True:
         if "upload" in command:
             # torrent -setMode upload filename
-            filename = command.split(' ')[3]
-            node.set_upload(filename)
+            filename = command.split(' ')[3:]
+            for i in range(len(filename)):
+                node.set_upload(filename[i])
         elif "download" in command:
             # torrent -setMode download filename
-            filename = command.split(' ')[3]
-            t2 = Thread(target=node.start_download, args=(filename,))
-            t2.setDaemon(True)
-            t2.start()
+            filename = command.split(' ')[3:]
+            threads = []
+            for i in range(len(filename)):
+                t2 = Thread(target=node.start_download, args=(filename[i],))
+                t2.setDaemon(True)
+                t2.start()
+                threads.append(t2)
         elif "exit" in command:
             # torrent exit
             node.exit()

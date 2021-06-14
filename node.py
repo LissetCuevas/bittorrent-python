@@ -16,12 +16,14 @@ SELECT_COUNT = 2
 
 
 class Node:
-    def __init__(self, name: str, rec_port: int, send_port: int):
+    def __init__(self, name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
         # send tracker the node_files each node has (in init).
-        self.rec_s = create_socket(rec_port)
-        self.send_s = create_socket(send_port)
-        self.name = name
-        self.files = self.set_filenames()
+        self.rec_s  = create_socket(rec_port, ip_node)
+        self.send_s = create_socket(send_port, ip_node)
+        self.name   = name
+        self.ip     = ip_node
+        self.ip_trk = ip_trk
+        self.files  = self.set_filenames()
         # {filename: list(msg of that file which contain the parts of data)}
         self.received_files = {}
         self.has_started_uploading = False
@@ -34,7 +36,7 @@ class Node:
         return ret
     
     def send_datagram(self, s, msg, addr):
-        dg = UDPDatagram(port_number(s), addr[1], msg.encode())
+        dg = UDPDatagram(port_number(s), addr[1], self.ip, addr[0], msg.encode())
         enc = crypto_unit.encrypt(dg)
         s.sendto(enc, addr)
         return dg
@@ -59,12 +61,13 @@ class Node:
     
     def search(self, filename: str) -> dict:
         message = NodeToTracker(self.name, modes.NEED, filename)
-        temp_s = create_socket(give_port())
-        self.send_datagram(temp_s, message, TRACKER_ADDR)
+        temp_s = create_socket(give_port(),self.ip)
+        self.send_datagram(temp_s, message, (self.ip_trk,TRACKER_ADDR[1]))
         
         while True:
             data, addr = temp_s.recvfrom(BUFFER_SIZE)
             dg: UDPDatagram = crypto_unit.decrypt(data)
+            #Aui falta validar que la ip sea la del tracker
             if dg.src_port != TRACKER_ADDR[1]:
                 raise ValueError(f"Someone other than the tracker with "
                                  f"port:{dg.src_port} sent {self.name} "
@@ -150,7 +153,7 @@ class Node:
     def receive_file(self, filename: str, rng: Tuple[int, int], owner: tuple):
         # telling the nodes we NEED a file, therefore idx=-1 and data=None.
         msg = FileCommunication(self.name, owner[0], filename, rng)
-        temp_s = create_socket(give_port())
+        temp_s = create_socket(give_port(), self.ip)
         self.send_datagram(temp_s, msg, owner[1])
         print(f"Node {self.name} has sent the start-of-transfer message to "
               f"{owner[0]}.")
@@ -179,7 +182,7 @@ class Node:
     def ask_file_size(self, filename: str, owner: tuple) -> int:
         # size == -1 means asking the size
         message = SizeInformation(self.name, owner[0], filename)
-        temp_s = create_socket(give_port())
+        temp_s = create_socket(give_port(), self.ip)
         self.send_datagram(temp_s, message, owner[1])
         
         while True:
@@ -197,7 +200,7 @@ class Node:
             return
         
         message = NodeToTracker(self.name, modes.HAVE, filename)
-        self.send_datagram(self.rec_s, message, TRACKER_ADDR)
+        self.send_datagram(self.rec_s, message, (self.ip_trk,TRACKER_ADDR[1]))
         
         if self.has_started_uploading:
             print(f"Node {self.name} is already in upload mode. Not making "
@@ -225,7 +228,7 @@ class Node:
                 print(f"Node {self.name} received the start-of-transfer "
                       f"message from Node {msg['src_name']}.")
                 self.send_file(msg["filename"], msg["range"], msg["src_name"],
-                               dg.src_port)
+                               dg.src_port, dg.src_ip)
     
     def tell_file_size(self, dg: UDPDatagram, msg: dict):
         filename = msg["filename"]
@@ -233,26 +236,26 @@ class Node:
         resp_message = SizeInformation(self.name, msg["src_name"],
                                        filename, size)
         # TODO generalize localhost
-        temp_s = create_socket(give_port())
-        self.send_datagram(temp_s, resp_message, ('localhost', dg.src_port))
+        temp_s = create_socket(give_port(), self.ip)
+        self.send_datagram(temp_s, resp_message, (dg.src_ip, dg.src_port))
         print(f"Sending the {filename}'s size to {msg['src_name']}.")
         free_socket(temp_s)
     
     def send_file(self, filename: str, rng: Tuple[int, int], dest_name: str,
-                  dest_port: int):
+                  dest_port: int, dest_ip: str):
         path = self.get_full_path(filename)
         parts = split_file(path, rng)
-        temp_s = create_socket(give_port())
+        temp_s = create_socket(give_port(), self.ip)
         for i, part in enumerate(parts):
             msg = FileCommunication(self.name, dest_name, filename, rng, i,
                                     part)
             # TODO generalize localhost
             # TODO print each udp datagram's range
-            self.send_datagram(temp_s, msg, ("localhost", dest_port))
+            self.send_datagram(temp_s, msg, (dest_ip, dest_port))
         
         # sending the end-of-transfer datagram
         msg = FileCommunication(self.name, dest_name, filename, rng)
-        self.send_datagram(temp_s, msg, ("localhost", dest_port))
+        self.send_datagram(temp_s, msg, (dest_ip, dest_port))
         print(f"Node {self.name} has sent the end-of-transfer message "
               f"to {dest_name}.")
         
@@ -261,21 +264,22 @@ class Node:
     def exit(self):
         print(f"Node {self.name} exited the program.")
         msg = NodeToTracker(self.name, modes.EXIT, '')
-        self.send_datagram(self.rec_s, msg, TRACKER_ADDR)
+        self.send_datagram(self.rec_s, msg, (self.ip_trk,TRACKER_ADDR[1]))
         free_socket(self.rec_s)
         free_socket(self.send_s)
 
 
-def main(name: str, rec_port: int, send_port: int):
-    node = Node(name, rec_port, send_port)
-    print('\n************************* COMMANDS *************************')
-    print('torrent -setMode <upload/download> <filename>')
-    print('torrent exit')
-    print('# You can upload/download multiple files by separating it by spaces')
-    print('*************************************************************')
-    print('Insert your command:')
-    command = input()
+def main(name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
+    node = Node(name, rec_port, send_port, ip_node, ip_trk)
     while True:
+        print('\n************************* COMMANDS *************************')
+        print('torrent -setMode <upload/download> <filename>')
+        print('torrent exit')
+        print('# You can upload/download multiple files by separating it by spaces')
+        print('*************************************************************')
+        print('Insert your command:')
+        command = input()
+
         if "upload" in command:
             # torrent -setMode upload filename
             filename = command.split(' ')[3:]
@@ -294,21 +298,22 @@ def main(name: str, rec_port: int, send_port: int):
             # torrent exit
             node.exit()
             exit(0)
-        
-        command = input()
 
 
 def handle_args():
     if len(sys.argv) > 1:
-        # example: "python3 node.py -n name -p port1 port2"
+        # example: "python3 node.py -n name -p port1 port2 -i ip1 ip2"
         name_pos = sys.argv.index("-n")
         name = str(sys.argv[name_pos + 1])
         ports_pos = sys.argv.index("-p")
         port1 = int(sys.argv[ports_pos + 1])
         port2 = int(sys.argv[ports_pos + 2])
-        return name, port1, port2
+        ip_pos = sys.argv.index("-i")
+        ip1 = str(sys.argv[ip_pos + 1])
+        ip2 = str(sys.argv[ip_pos + 2])
+        return name, port1, port2, ip1, ip2
 
 
 if __name__ == '__main__':
-    name, p1, p2 = handle_args()
-    main(name, p1, p2)
+    name, p1, p2, ip1, ip2 = handle_args()
+    main(name, p1, p2, ip1, ip2)

@@ -38,11 +38,11 @@ def give_port() -> int:
     return rand_port
 
 
-def create_socket(port: int) -> socket.socket:
+def create_socket(port: int , ip: str) -> socket.socket:
     global occupied_ports
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(('localhost', port))
+    s.bind((ip, port))
     occupied_ports.append(port)
     return s
 

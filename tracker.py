@@ -1,4 +1,5 @@
 import json
+import sys
 import pprint
 import threading
 from collections import defaultdict
@@ -11,13 +12,14 @@ from utils import *
 
 
 class Tracker:
-    def __init__(self):
-        self.tracker_s = create_socket(TRACKER_ADDR[1])
+    def __init__(self, ip: str):
+        self.tracker_s = create_socket(TRACKER_ADDR[1], ip)
+        self.ip = ip
         self.uploader_list = defaultdict(list)
         self.upload_freq_list = defaultdict(int)
     
     def send_datagram(self, message: bytes, addr: Tuple[str, int]):
-        dg = UDPDatagram(port_number(self.tracker_s), addr[1], message)
+        dg = UDPDatagram(port_number(self.tracker_s), addr[1], self.ip, addr[0], message)
         enc = crypto_unit.encrypt(dg)
         self.tracker_s.sendto(enc, addr)
     
@@ -109,10 +111,19 @@ class Tracker:
             '****************************************************************')
 
 
-def main():
-    t = Tracker()
+def main(ip: str):
+    t = Tracker(ip)
     t.start()
 
 
+def handle_args():
+    if len(sys.argv) > 1:
+        # example: "python3 tracker.py -i iptracker"
+        ip_pos = sys.argv.index("-i")
+        ip = str(sys.argv[ip_pos + 1])
+        return ip
+
+
 if __name__ == '__main__':
-    main()
+    ip = handle_args()
+    main(ip)

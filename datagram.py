@@ -4,14 +4,16 @@ from utils import MAX_DATA_SIZE
 
 
 class UDPDatagram:
-    def __init__(self, src_port: int, dest_port: int, data: bytes):
+    def __init__(self, src_port: int, dest_port: int, src_ip: str, dest_ip: str, data: bytes):
         assert 0 < len(data) <= MAX_DATA_SIZE, print(
             f"The data length should be bigger than 0 bytes "
             f"and lower than or equal to {MAX_DATA_SIZE} bytes.")
         
-        self.src_port = src_port
+        self.src_ip    = src_ip
+        self.dest_ip   = dest_ip
+        self.src_port  = src_port
         self.dest_port = dest_port
-        self.data = data
+        self.data      = data
     
     def encode(self) -> bytes:
         return pickle.dumps(self)

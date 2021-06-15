@@ -56,8 +56,9 @@ class Node:
         print(f"Node {self.name} is starting to download {filename}.")
         res = self.search(filename)
         owners = res["owners"]
-        self.split_owners(filename, owners)
         # split the parts and assign each part to a node
+        self.split_owners(filename, owners)
+        
     
     def search(self, filename: str) -> dict:
         message = NodeToTracker(self.name, modes.NEED, filename)
@@ -92,6 +93,7 @@ class Node:
         print(f"The size of {filename} is {size}.")
         # splitting equally on all the owners
         ranges = self.split_size(size, len(owners))
+        print('\nranges : ',ranges,'\n')
         print(f"Each owner now sends {round(size / len(owners), 0)} bytes of "
               f"the {filename}.")
         
@@ -121,18 +123,26 @@ class Node:
         # we have received all parts of the file.
         # now sort them based on the ranges
         
+        #print('\n unordered files: ', self.received_files[filename] ,'\n')
         ordered_parts = self.sort_received_files(filename)
-        print(f"All the parts of {filename} are now sorted.")
+        #print(f"All the received parts of {filename} are now sorted.")
         whole_file = []
         for section in ordered_parts:
             for part in section:
                 whole_file.append(part["data"])
         assemble_file(whole_file, self.get_full_path(filename))
+        #print('\n ordered files: ', self.received_files[filename] ,'\n')
         print(f"{filename} is successfully saved for Node {self.name}.")
         
         # TODO check if there is a missing range
 
+
         # TODO add algorithm
+
+        # upload the dowloanded file to wide the owners and network stability
+        self.files.append(filename)
+        self.set_upload(filename)
+        
     
     @staticmethod
     def split_size(size: int, num_parts: int):
@@ -235,7 +245,6 @@ class Node:
         size = os.stat(self.get_full_path(filename)).st_size
         resp_message = SizeInformation(self.name, msg["src_name"],
                                        filename, size)
-        # TODO generalize localhost
         temp_s = create_socket(give_port(), self.ip)
         self.send_datagram(temp_s, resp_message, (dg.src_ip, dg.src_port))
         print(f"Sending the {filename}'s size to {msg['src_name']}.")
@@ -249,7 +258,6 @@ class Node:
         for i, part in enumerate(parts):
             msg = FileCommunication(self.name, dest_name, filename, rng, i,
                                     part)
-            # TODO generalize localhost
             # TODO print each udp datagram's range
             self.send_datagram(temp_s, msg, (dest_ip, dest_port))
         
@@ -273,7 +281,7 @@ def main(name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
     node = Node(name, rec_port, send_port, ip_node, ip_trk)
     while True:
         print('\n************************* COMMANDS *************************')
-        print('torrent -setMode <upload/download> <filename>')
+        print('torrent <upload/download> <filename>')
         print('torrent exit')
         print('# You can upload/download multiple files by separating it by spaces')
         print('*************************************************************')
@@ -281,13 +289,13 @@ def main(name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
         command = input()
 
         if "upload" in command:
-            # torrent -setMode upload filename
-            filename = command.split(' ')[3:]
+            # torrent upload filename
+            filename = command.split(' ')[2:]
             for i in range(len(filename)):
                 node.set_upload(filename[i])
         elif "download" in command:
-            # torrent -setMode download filename
-            filename = command.split(' ')[3:]
+            # torrent download filename
+            filename = command.split(' ')[2:]
             threads = []
             for i in range(len(filename)):
                 t2 = Thread(target=node.start_download, args=(filename[i],))

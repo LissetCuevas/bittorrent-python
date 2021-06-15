@@ -90,6 +90,7 @@ class Tracker:
                 self.uploader_list[file].remove(item_json)
             if len(self.uploader_list[file]) == 0:
                 self.uploader_list.pop(file)
+        del self.upload_freq_list[node_name] 
         print(f"Node {message['name']} exited the network.")
         self.print_db()
     

@@ -26,6 +26,7 @@ class Node:
         self.files  = self.set_filenames()
         # {filename: list(msg of that file which contain the parts of data)}
         self.received_files = {}
+        self.files_info = {}
         self.has_started_uploading = False
     
     def set_filenames(self) -> list:
@@ -90,10 +91,10 @@ class Node:
         # retrieve file's size from one of the owners
         print(f"Asking the {filename}'s size from {owners[0][0]}.")
         size = self.ask_file_size(filename, owners[0])
-        print(f"The size of {filename} is {size}.")
+        print(f"\n-------The size of {filename} is {size}.-------\n")
         # splitting equally on all the owners
         ranges = self.split_size(size, len(owners))
-        print('\nranges : ',ranges,'\n')
+        #print('\nranges : ',ranges,'\n')
         print(f"Each owner now sends {round(size / len(owners), 0)} bytes of "
               f"the {filename}.")
         
@@ -175,6 +176,8 @@ class Node:
             msg = Message.decode(dg.data)
             # msg now contains the actual bytes of the data for that file.
             
+            if msg["idx"] == 0:
+
             # TODO some validation
             if msg["filename"] != filename:
                 print(f"Wanted {filename} but received {msg['range']} range "
@@ -188,9 +191,12 @@ class Node:
                 return
             
             self.received_files[filename].append(msg)
+            print(f'-----{filename} {msg["src_name"]} sent {msg["idx"]+1}/{msg["total"]} of range {msg["range"]}')
     
     def ask_file_size(self, filename: str, owner: tuple) -> int:
         # size == -1 means asking the size
+
+
         message = SizeInformation(self.name, owner[0], filename)
         temp_s = create_socket(give_port(), self.ip)
         self.send_datagram(temp_s, message, owner[1])
@@ -254,9 +260,10 @@ class Node:
                   dest_port: int, dest_ip: str):
         path = self.get_full_path(filename)
         parts = split_file(path, rng)
+        total = len(parts)
         temp_s = create_socket(give_port(), self.ip)
         for i, part in enumerate(parts):
-            msg = FileCommunication(self.name, dest_name, filename, rng, i,
+            msg = FileCommunication(self.name, dest_name, filename, rng, i, total,
                                     part)
             # TODO print each udp datagram's range
             self.send_datagram(temp_s, msg, (dest_ip, dest_port))
@@ -277,17 +284,18 @@ class Node:
         free_socket(self.send_s)
 
 
+
 def main(name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
     node = Node(name, rec_port, send_port, ip_node, ip_trk)
-    while True:
-        print('\n************************* COMMANDS *************************')
-        print('torrent <upload/download> <filename>')
-        print('torrent exit')
-        print('# You can upload/download multiple files by separating it by spaces')
-        print('*************************************************************')
-        print('Insert your command:')
-        command = input()
+    print('\n************************* COMMANDS *************************')
+    print('torrent <upload/download> <filename>')
+    print('torrent exit')
+    print('# You can upload/download multiple files by separating it by spaces')
+    print('*************************************************************')
+    print('Insert your command:')
+    command = input()
 
+    while True:
         if "upload" in command:
             # torrent upload filename
             filename = command.split(' ')[2:]
@@ -306,6 +314,8 @@ def main(name: str, rec_port: int, send_port: int, ip_node: str, ip_trk: str):
             # torrent exit
             node.exit()
             exit(0)
+
+        command = input()
 
 
 def handle_args():

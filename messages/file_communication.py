@@ -4,7 +4,7 @@ from messages.message import Message
 
 class FileCommunication(Message):
     def __init__(self, src_name: str, dest_name: str, filename: str,
-                 indices: Tuple[int, int], idx=-1, data: bytes = None):
+                 indices: Tuple[int, int], idx=-1, total: int = 0, data: bytes = None):
         """
         example:
             range of the desired file:
@@ -24,4 +24,5 @@ class FileCommunication(Message):
         self.filename = filename
         self.range = indices
         self.idx = idx
+        self.total = total
         self.data = data

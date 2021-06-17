@@ -26,7 +26,6 @@ class Node:
         self.files  = self.set_filenames()
         # {filename: list(msg of that file which contain the parts of data)}
         self.received_files = {}
-        self.files_info = {}
         self.has_started_uploading = False
     
     def set_filenames(self) -> list:
@@ -92,6 +91,7 @@ class Node:
         print(f"Asking the {filename}'s size from {owners[0][0]}.")
         size = self.ask_file_size(filename, owners[0])
         print(f"\n-------The size of {filename} is {size}.-------\n")
+
         # splitting equally on all the owners
         ranges = self.split_size(size, len(owners))
         #print('\nranges : ',ranges,'\n')
@@ -175,8 +175,6 @@ class Node:
             
             msg = Message.decode(dg.data)
             # msg now contains the actual bytes of the data for that file.
-            
-            if msg["idx"] == 0:
 
             # TODO some validation
             if msg["filename"] != filename:
@@ -189,7 +187,7 @@ class Node:
                       f"from {owner[0]}.")
                 free_socket(temp_s)
                 return
-            
+
             self.received_files[filename].append(msg)
             print(f'-----{filename} {msg["src_name"]} sent {msg["idx"]+1}/{msg["total"]} of range {msg["range"]}')
     
